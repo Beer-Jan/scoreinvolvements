@@ -1,0 +1,128 @@
+---
+title: "Score Involvement Analysis"
+author: "Raffael Tigani"
+date: "2024-07-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The 2018 book *Footballistics* is a one-of-a-kind book about data analytics in the AFL. In one of its chapters author James Coventry discusses the use of Score Involvements, a more recent addition to the AFL statistical cannon, to determine the 'shape' of the various game plans used by every team in the AFL and whether or not teams are reliant on certain players to generate scores. Data analysts in the book acheive this by generating plots using the score involvements statistic to illustrate the percentage of scores each player is involved in on average per game. Furthermore, each player is colour-coded by position, which makes it easier to determine at a glance a game style that we can compare with other teams.
+
+I have written a system of files that maintains an up-to-date data set from which these plots can be quickly created for data going back to the 2015 AFL season (as far back as score involvement data could be accessed at the time it was written). Additionally, since there is no publicly available position data for AFL players, it also includes a system for deriving player positions just from stats.
+
+## Data Processing
+
+The below function updates the data set to include all played rounds. This will take about 1-2 minutes, depending on how long it has been since the last update.
+
+```{r update, results = "hide"}
+source("updatedataframes.R")
+
+datasetUpdate()
+```
+
+### Score Involvements
+
+The data is used to analyse the score involvements for each player and also to generate the positions for each player. The score involvement data come from the AFL website. A player receives a score involvement when they are involved in an unbroken chain that leads to a behind or a goal. The involvement can be a disposal, hitout or knock on, and a player will only get one score involvement if they have multiple involvements in the chain.
+
+The script turns each player's score involvements for every game into a percentage of the number of scoring shot their team had, to factor in that in higher scoring games, players will naturally be involved in more scores. Then, it takes an average of these percentages across the entire season to get the final statistic, the percentage score involvement per game. This stat essentially answers the question "for each game a player plays, what percentage of scoring shot chains is that player expected to be involved in?". This is a good way to measure a player's influence on a game, as it directly measures the player's influence on team scoring. If we also look at the positions of players with high score involvements, we can visualise different play styles.
+
+### Positions
+
+Unfortunately, there is no public data on what a players position is. For some players, it is obvious (i.e. we all know Charlie Curnow is a forward), but other players can be harder to define. They may always be named on the bench, so we can't tell what they are by consulting the team sheet (where we know coaches can play tricks by naming players in the wrong position), they may be a winger who often rolls back, they can be a forward who sometimes goes into the midfield or a midfielder who rotates forward. They could even have a change in position mid-season to rescue their career. Often times, most people can't tell you what position every player is on their own team's list, let alone the rest of the competition. So in the absence of publicly available data on what position each player is, I decided to use an algorithm to assign positions.
+
+This is done by following the method set out by The Arc website in this article: <https://thearcfooty.com/2016/10/15/classifying-players-positions-using-public-data/>
+
+I use the same data engineering and the same clustering method (PAM clustering) as they use. There are some slight differences in the parameters (they use it to find 8 different positions, I do it for 7 as I found it gave better results which I could funnel into 4 different positions). I also have an updated data set going up to round 19 of the 2024 AFL Season. It certainly is not perfect but it can quickly allow me to quickly get mostly accurate position data of each player for 10+ seasons, so it does the trick.
+
+It does routinely struggle with players who play multiple positions throughout a season; e.g. Zach Williams in 2024, who played the first half of the season as a defender before being moved into the forward line, is classified as a midfielder as of Round 21, 2024, despite not playing in the midfield at all. However, this is to be expected as the data is engineered to determine not only what a player does per game but where do they do it, and half a season each in the forward and back lines averages to posessions in no particular part of the ground.
+
+Reproducible R code to produce the medoids can be found in recreatemedioids.R.
+
+## Plots
+
+Graphs can be instantaneously be created for the percentage score involvement per game for each team's seasons from 2015. Player must have played at least 9 games to be included. Below as an example is Carlton in 2024.
+
+```{r eg1}
+source("createsiplot.R")
+
+createSIGraph(2024, "Carlton")
+```
+
+This example gives us a typical case of what most teams' score involvements profiles look like. Often they will have one or more dominant players (here its Charlie Curnow, a forward but midfielders often take the top spot as well). As expected, forwards and midfielders tend to have a higher percentage score involvement per game than defenders, with anything above 15% for defenders indicating a fairly offensive role. 
+
+You cannot simply determine from looking at the plots if certain players are more important to the team than others or if a certain team is performing well. Certain attributes of a plot may be symptomatic of a team performing well while in another plot be an outcome of poor football. An example given in *Footballistics* is that of Adelaide and Carlton in 2017 (runners up and 16th on the ladder respectively).
+
+```{r eg2}
+source("createsiplot.R")
+
+createSIGraph(2017, "Adelaide")
+createSIGraph(2017, "Carlton")
+```
+
+Both teams have two defenders well above 15% of score involvement. For Adelaide, that might indicate fast, uninterrupted scoring chains originating from the back half, which are hard to defend, while for Carlton, that might indicate the ball living in the defensive half for much of the game leading to defenders racking up plenty of touches. Therefore this shows that we need to not look at these graphs in a vacuum. These graphs might show us problems that need to be fixed for a team to improve or things a team does well that the opposition wants to stop.
+
+### Analysis of Game Plans
+
+#### Premiership Teams
+
+As examples for comparisons, we can look at premiership winning teams, whose game styles are always heavily analysed following their premiership runs.
+
+```{r eg3}
+source("createsiplot.R")
+
+createSIGraph(2015, "Hawthorn")
+createSIGraph(2016, "Western Bulldogs")
+createSIGraph(2017, "Richmond")
+createSIGraph(2018, "West Coast")
+createSIGraph(2019, "Richmond")
+createSIGraph(2020, "Richmond")
+createSIGraph(2021, "Melbourne")
+createSIGraph(2022, "Geelong")
+createSIGraph(2023, "Collingwood")
+```
+
+Hawthorn's final premiership of their threepeat shows us their potent forward line which dominates their scoring, headed by some out-and-out stars. Another thing to note is the low involvement of ruckmen, whose role becomes more important in more recent years (e.g. Carlton in 2024 as seen above).
+
+The Western Bulldogs in 2016 contrasts this heavily with a strong midfield, which goes with their comparatively smaller forward line with lesser known names. Another thing to note with the Bulldogs is the even spread of contributors, which indicates the team-focussed coaching style of Luke Beveridge and the tendency of his team to share the ball around. I have yet to see a score involvements plot with such an evenness. 
+
+Dustin Martin unsurprisingly dominates Richmond's 2017 premiership team's scoring, but another interesting development is the large brigade of small forwards at or below 20% score involvement, not seen in the previous two premierships. Here we see the defensive forward role emerging, as these are all small forwards whose primary goal is not to kick or set up goals but to prevent the ball leaving the attacking 50. Also to note is the low number of players that played over 9 games for their season: Richmond had a healthy list throughout 2017, which always helps with winning a flag.
+
+West Coast in 2018 employed a far different looking style to the "chaos ball" of Richmond in 2017. With no defenders over 15%, the Eagles seem to use slower and more methodical movement, and with most small forwards important to the flag over 20%, we see a more traditional forward set-up. 
+
+Richmond in 2019-2020 add Tom Lynch and Shai Bolton to the mix, providing a more dynamic forward line. There are still many forwards important to the flag around or below the 20% mark exemplifying their pressure-forward "DNA". From 2019 to 2020 we also see the growth in Jayden Short as an attacking half-backer. Defensive forwards and attacking half-backs are now a common staple of many teams in the AFL.
+
+Melbourne in 2021 is unique with its two rucks that create and link up in scoring chains, showing the evolution of the ruck role in the game. Petracca and Oliver dominate, with a quick drop off in score involvement percentage. This tends to show smaller scoring chains, which would be a feature of a highly contested team with slower and safer ball movement. Simon Goodwin espoused the mantra "contest and defense" throughout 2021, which we can see in the plot.
+
+Geelong in 2022 were an extremely dominant team with an extremely potent forward line. In all other premiership plots bar Hawthorn in 2015, top spot is occupied by a midfielder, so this is a departure from what we normally see. Coupled with an even midfield performance teams found it impossible to stop Geelong's litany of contributors in the two front thirds of the ground.
+
+Finally, Collingwood in 2023 barely has a forward line to speak of, especially considering Geelong's profile from the previous year, so Collingwood opted for an evenness of contributors just like the Western Bulldogs in 2016.
+
+#### Single Team
+
+Another interesting way to view this data is looking at how a single team fairs from year to year and try to identify what goes right in the year they do well and what goes wrong in years where they finish at the foot of the ladder. Melbourne from 2018-2024 has experienced a whole range of finishes, so lets use them as an example.
+
+```{r}
+source("createsiplot.R")
+
+createSIGraph(2018, "Melbourne")
+createSIGraph(2019, "Melbourne")
+createSIGraph(2020, "Melbourne")
+createSIGraph(2021, "Melbourne")
+createSIGraph(2022, "Melbourne")
+createSIGraph(2023, "Melbourne")
+createSIGraph(2024, "Melbourne")
+```
+
+In 2018, Melbourne make the top 8 for the first time in 12 years and make the Preliminary Final. They are a very high scoring team with 3 top contributors in the forward line and an even midfield performance, just like the Geelong graph we saw earlier who were also that season's highest scoring side. We can also see Max Gawn being important to them, as he does consistently from season to season. In 2019 they lose Jesse Hogan and Tom McDonald's impact falls off, and the midfield loses their evenness, which may be reasons for their dramatic slide to second last position on the ladder.
+
+They climb back to 9th on the ladder, as the future Norm Smith medalist Christian Petracca becomes key to their success. He is responsible for a huge chunk of their scoring. He doesn't have enough players come with him so their rise in limited to outside the 8. When they win the flag in 2021, Clayton Oliver takes up more of the load and together they are a powerful duo that are hard to stop. No doubt their impact is amplified by Goodwin's contest focus. They also introduce Luke Jackson to back up Gawn, and Tom McDonald regains form to combine with Bailey Fritsch in the forward line to create a trio of duos, meaning that the opposition has to contend with two important players in the midfield, ruck and forward line. Versatility is often the mark of good teams.
+
+In 2022, their profile looks remarkably similar. However, the result is that they get bundled out of the finals in straight sets, which seems to indicate the competition adapting to their style and finding ways to fight it. In 2023, the bones of Melbourne's premiership winning style remain, but Gawn drops down as Brodie Grundy cannot combine with him as effectively as Jackson did and they rely even more on Petracca for scoring chains . Defenders are even less involved with scoring, with not one crossing 15% involvement, which indicates that teams are slowing them down further. 
+
+In 2024, Gawn has no partner, so while he's back to his best they miss the versatility of a ruck duo. Furthermore, Oliver drops off, their defenders still can't cross 15% and their reliance on Petracca haunts them when he goes down with a season-ending injury mid-year. As of the end of round 21, 2024, they seem unlikely to finish in the top 8, and go into the end of the season with a clear need to reinvent themselves while they still have a star-studded list. 
+
