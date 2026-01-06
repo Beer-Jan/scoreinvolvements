@@ -11,3 +11,6 @@ positionmedoids.csv      : medoids that are used to find player positions from a
 recreatemedoids.R        : script that gives the same medoids that are used for classification of positions
 sianalysis.html          : file that walks through statistical analysis
 updatedataframes.R       : updates the csv's with new data from afl website and afltables
+
+
+UPDATE 06/01/2025 - updatedataframes.R does not work due to changes to the season structure in 2025 onwards, but existing data from the dataset can be used.
